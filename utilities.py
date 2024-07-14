@@ -43,265 +43,6 @@ def gridding(state_dim, state_constraints, num_states = 251, use_zero_threshold 
     print('Grid size: {}'.format(state_discretization.nindex))
     print('Discretization constant (tau): {}'.format(tau))
     return state_discretization
-
-def compute_roa(grid, env_func, ctrl ,equilibrium=None, no_traj=True):
-    """Compute the largest ROA as a set of states in a discretization."""
-    if isinstance(grid, np.ndarray):
-        all_points = grid
-        nindex = grid.shape[0]
-        ndim = grid.shape[1]
-    else: # grid is a GridWorld instance
-        all_points = grid.all_points
-        nindex = grid.nindex # number of points in the discretization
-        ndim = grid.ndim  # dimension of the state space
-
-    # Forward-simulate all trajectories from initial points in the discretization
-    # if no_traj:
-    #     end_states = all_points
-    #     for t in range(1, horizon):
-    #         end_states = closed_loop_dynamics(end_states)
-    # else:
-    #     trajectories = np.empty((nindex, ndim, horizon))
-    #     trajectories[:, :, 0] = all_points
-    #     for t in range(1, horizon):
-    #         trajectories[:, :, t] = closed_loop_dynamics(trajectories[:, :, t - 1])
-    #     end_states = trajectories[:, :, -1]
-    random_env = env_func(gui=False)
-
-    roa = np.zeros((nindex))
-    trajectories = [{} for _ in range(nindex)]
-
-    for state_index in range(nindex):
-        # for all initial state in the grid
-        # print('state_index', state_index)
-        init_state = grid.all_points[state_index]
-        init_state_dict = {'init_x': init_state[0], 'init_x_dot': init_state[1], \
-                            'init_theta': init_state[2], 'init_theta_dot': init_state[3]}
-        init_state, _ = random_env.reset(init_state = init_state_dict)
-        # print('init_state', init_state)
-        static_env = env_func(gui=False, random_state=False, init_state=init_state)
-        static_train_env = env_func(gui=False, randomized_init=False, init_state=init_state)
-        # Create experiment, train, and run evaluation
-        experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
-        
-        try:
-            trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1, verbose=False)
-            roa[state_index] = trajs_data['info'][-1][-1]['goal_reached']
-            input_traj = trajs_data['action'][0]
-            state_traj = trajs_data['obs'][0]
-            trajectories[state_index]['state_traj'] = state_traj
-            trajectories[state_index]['input_traj'] = input_traj
-            print('trajectory[state_index]', trajectories[state_index])
-            
-            print('goal reached', trajs_data['info'][-1][-1]['goal_reached'])
-            # exit()
-            # close environments
-            static_env.close()
-            static_train_env.close()
-        except RuntimeError:
-            print('RuntimeError: possibly infeasible initial state')
-            roa[state_index] = False
-            # print(ctrl.model.__dir__())
-            # print(ctrl.model.nx)
-            # exit()
-            trajectories[state_index]['state_traj'] = np.zeros((2, ctrl.model.nx))
-            trajectories[state_index]['input_traj'] = np.zeros((1, ctrl.model.nu))
-            # close environments
-            static_env.close()
-            static_train_env.close()
-            continue
-        # trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1, verbose=False)
-        # print('obs\n', trajs_data['obs'])
-        # print('trajs_data\n', trajs_data['info'][-1][-1])
-        # print('\n')
-        # print('trajs_data[\'info\']\n', trajs_data['info'][-1][-1]['goal_reached'])
-        # input('press enter to continue')
-        # print('\n')
-        # exit()
-        # print('goal reached', trajs_data['info'][-1][1]['goal_reached'])
-        
-
-    # if equilibrium is None:
-    #     equilibrium = np.zeros((1, ndim))
-    random_env.close()
-    # # Compute an approximate ROA as all states that end up "close" to 0
-    # dists = np.linalg.norm(end_states - equilibrium, ord=2, axis=1, keepdims=True).ravel()
-    # roa = (dists <= tol)
-    if no_traj:
-        return roa
-    else:
-        return roa, trajectories
-
-
-
-def compute_roa_fix(grid, env_func, ctrl ,equilibrium=None, no_traj=True):
-    """Compute the largest ROA as a set of states in a discretization."""
-    if isinstance(grid, np.ndarray):
-        all_points = grid
-        nindex = grid.shape[0]
-        ndim = grid.shape[1]
-    else: # grid is a GridWorld instance
-        all_points = grid.all_points
-        nindex = grid.nindex # number of points in the discretization
-        ndim = grid.ndim  # dimension of the state space
-
-    random_env = env_func(gui=False)
-
-    roa = np.zeros((nindex))
-    
-    for state_index in range(nindex):
-        # for all initial state in the grid
-        # print('state_index', state_index)
-        init_state = grid.all_points[state_index]
-        init_state_dict = {'init_x': 0.0, 'init_x_dot': init_state[0], \
-                            'init_theta': init_state[1], 'init_theta_dot': init_state[2]}
-        init_state, _ = random_env.reset(init_state = init_state_dict)
-        # print('init_state', init_state)
-        static_env = env_func(gui=False, random_state=False, init_state=init_state)
-        static_train_env = env_func(gui=False, randomized_init=False, init_state=init_state)
-        # Create experiment, train, and run evaluation
-        experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
-
-        try:
-            trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1, verbose=False)
-            roa[state_index] = trajs_data['info'][-1][-1]['goal_reached']
-            # close environments
-            static_env.close()
-            static_train_env.close()
-        except RuntimeError:
-            print('RuntimeError: possibly infeasible initial state')
-            roa[state_index] = False
-            # close environments
-            static_env.close()
-            static_train_env.close()
-            continue    
-
-    # if equilibrium is None:
-    #     equilibrium = np.zeros((1, ndim))
-    random_env.close()
-    # # Compute an approximate ROA as all states that end up "close" to 0
-    # dists = np.linalg.norm(end_states - equilibrium, ord=2, axis=1, keepdims=True).ravel()
-    # roa = (dists <= tol)
-    if no_traj:
-        return roa
-    else:
-        return roa, trajectories
-
-
-# define the function to be parallelized
-def simulate_at_index(state_index, grid, env_func, ctrl):
-    random_env = env_func(gui=False)
-    init_state = grid.all_points[state_index]
-    init_state_dict = {'init_x': init_state[0], 'init_x_dot': init_state[1], \
-                        'init_theta': init_state[2], 'init_theta_dot': init_state[3]}
-    init_state, _ = random_env.reset(init_state = init_state_dict)
-    # print('init_state', init_state)
-    static_env = env_func(gui=False, random_state=False, init_state=init_state)
-    static_train_env = env_func(gui=False, randomized_init=False, init_state=init_state)
-    # Create experiment, train, and run evaluation
-    experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
-
-    # # if infeasible initial state, return False
-    # try:
-    #     trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1, verbose=False)
-    #     static_env.close()
-    #     static_train_env.close()
-    #     print('goal reached', trajs_data['info'][-1][-1]['goal_reached'])
-    #     # return result
-    #     if trajs_data['info'][-1][-1]['goal_reached']:
-    #         return True
-    #     else:
-    #         return False 
-    # except RuntimeError:
-    #     print('RuntimeError: possibly infeasible initial state')
-    #     # close environments
-    #     static_env.close()
-    #     static_train_env.close()
-    #     return False
-    # # close the env
-    trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1, verbose=False)
-    static_env.close()
-    static_train_env.close()
-    random_env.close()
-
-    return trajs_data['info'][-1][-1]['goal_reached']
-               
-
-def compute_roa_par(grid, env_func, ctrl, equilibrium=None, no_traj=True):
-    """Compute the largest ROA as a set of states in a discretization."""
-    if isinstance(grid, np.ndarray):
-        all_points = grid
-        nindex = grid.shape[0]
-        ndim = grid.shape[1]
-    else: # grid is a GridWorld instance
-        all_points = grid.all_points
-        nindex = grid.nindex # number of points in the discretization
-        ndim = grid.ndim  # dimension of the state space
-
-    # Forward-simulate all trajectories from initial points in the discretization
-    # random_env = env_func(gui=False)
-    roa = [False] * nindex
-
-    # # init multiprocessing pool
-    # pool = mp.Pool(mp.cpu_count())
-    # # pool apply the 'simulate_at_index' function to all state indices
-    # roa = [pool.apply(simulate_at_index, \
-    #                   args=(state_idx, grid, random_env, env_func, ctrl)) for state_idx in range(nindex)]
-    # # close the pool
-    # pool.close()
-    # roa = pmap(simulate_at_index, range(nindex), (grid, random_env, env_func, ctrl))
-    roa = pmap(simulate_at_index, range(nindex), (grid, env_func, ctrl))
-    
-    # convert list to np array
-    roa = np.array(roa)
-
-    if no_traj:
-        return roa
-    else:
-        return roa, trajectories
-
-# define the function to be parallelized
-def simulate_at_index_fix(state_index, grid, env_func, ctrl):
-    random_env = env_func(gui=False)
-    init_state = grid.all_points[state_index]
-    init_state_dict = {'init_x': 0.0, 'init_x_dot': init_state[0], \
-                        'init_theta': init_state[1], 'init_theta_dot': init_state[2]}
-    init_state, _ = random_env.reset(init_state = init_state_dict)
-    # print('init_state', init_state)
-    static_env = env_func(gui=False, random_state=False, init_state=init_state)
-    static_train_env = env_func(gui=False, randomized_init=False, init_state=init_state)
-    # Create experiment, train, and run evaluation
-    experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
-
-    trajs_data, _ = experiment.run_evaluation(training=True, n_episodes=1, verbose=False)
-    static_env.close()
-    static_train_env.close()
-    random_env.close()
-
-    return trajs_data['info'][-1][-1]['goal_reached']
-               
-
-def compute_roa_fix_par(grid, env_func, ctrl, equilibrium=None, no_traj=True):
-    """Compute the largest ROA as a set of states in a discretization."""
-    if isinstance(grid, np.ndarray):
-        all_points = grid
-        nindex = grid.shape[0]
-        ndim = grid.shape[1]
-    else: # grid is a GridWorld instance
-        all_points = grid.all_points
-        nindex = grid.nindex # number of points in the discretization
-        ndim = grid.ndim  # dimension of the state space
-
-    # Forward-simulate all trajectories from initial points in the discretization
-    roa = [False] * nindex
-    roa = pmap(simulate_at_index_fix, range(nindex), (grid, env_func, ctrl))
-    # convert list to np array
-    roa = np.array(roa)
-
-    if no_traj:
-        return roa
-    else:
-        return roa, trajectories
     
 def binary_cmap(color='red', alpha=1.):
     """Construct a binary colormap."""
@@ -397,48 +138,6 @@ def discretize_linear_system(A, B, dt, exact=False):
 
     return Ad, Bd
 
-def get_discrete_linear_system_matrices(model, x_0, u_0):
-    '''Get discrete linear system matrices for a given model.
-
-    Args:
-        model (ctrl.model)
-        x_0 (ndarray): The initial state.
-        u_0 (ndarray): The initial input.
-
-    Returns:
-        A (ndarray): The discrete linear state matrix A.
-        B (ndarray): The discrete linear input matrix B.
-    '''
-
-    # Linearization.
-    df = model.df_func(x_0, u_0)
-    A, B = df[0].toarray(), df[1].toarray()
-
-    # Discretize.
-    A, B = discretize_linear_system(A, B, model.dt)
-
-    return A, B
-
-def onestep_dynamics(x, env_func, ctrl):
-    ''' one-step forward dynamics '''
-    # get the format of the initial state
-    random_env = env_func(gui=False)
-    init_state_dict = {'init_x': x[0], 'init_x_dot': x[1], \
-                        'init_theta': x[2], 'init_theta_dot': x[3]}
-    init_state, _ = random_env.reset(init_state = init_state_dict)
-    static_env = env_func(gui=False, random_state=False, init_state=init_state)
-    static_train_env = env_func(gui=False, randomized_init=False, init_state=init_state)
-    experiment = BaseExperiment(env=static_env, ctrl=ctrl, train_env=static_train_env)
-    trajs_data, _ = experiment.run_evaluation(training=False, n_steps=1, verbose=False)
-    x = trajs_data['obs'][0][-1]
-    static_env.close()
-    static_train_env.close()
-    random_env.close()
-
-    return x  
-
-
-
 class InvertedPendulum(object):
     """Inverted Pendulum.
 
@@ -505,12 +204,6 @@ class InvertedPendulum(object):
             return state, action
 
         Tx_inv, Tu_inv = map(np.diag, self.inv_norm)
-        # if isinstance(Tx_inv, np.ndarray):
-        #     Tx_inv = torch.from_numpy(Tx_inv)
-        # if isinstance(Tu_inv, np.ndarray):
-        #     Tu_inv = torch.from_numpy(Tu_inv)
-        # state = tf.matmul(state, Tx_inv)
-        # state = torch.matmul(state, Tx_inv)
         state = np.matmul(state, Tx_inv)
 
         if action is not None:
@@ -526,19 +219,8 @@ class InvertedPendulum(object):
             return state, action
 
         Tx, Tu = map(np.diag, self.normalization)
-
-        # state = tf.matmul(state, Tx)
-        # convert to torch
-        # if isinstance(Tx, np.ndarray):
-        #     Tx = torch.from_numpy(Tx)
-        # if isinstance(Tu, np.ndarray):
-        #     Tu = torch.from_numpy(Tu)
-
-        # state = torch.matmul(state, Tx)
         state = np.matmul(state, Tx)
         if action is not None:
-            # action = tf.matmul(action, Tu)
-            # action = torch.matmul(action, Tu)
             action = np.matmul(action, Tu)
 
         return state, action
@@ -578,13 +260,9 @@ class InvertedPendulum(object):
         sysd = sys.to_discrete(self.dt)
         return sysd.A, sysd.B
 
-    # @concatenate_inputs(start=1)
     def forward(self, state_action):
         """Evaluate the dynamics."""
         # Denormalize
-        # state, action = tf.split(state_action, [2, 1], axis=1)
-        # state, action = torch.split(state_action, [2, 1], dim=0)
-        # print('np.split(state_action, [2, 1], axis=0)', np.split(state_action, [2], axis=0))
         # split the state_action into state and action, 
         # the first two column are state, the last column is action
         state, action = np.split(state_action, [2], axis=1)
@@ -623,69 +301,17 @@ class InvertedPendulum(object):
         friction = self.friction
         inertia = self.inertia
 
-        # angle, angular_velocity = tf.split(state, 2, axis=1)
-        # print('state', state)
-        # print('split result', torch.split(state, 1, dim=0))
-        # print('np.split(state, [1], axis=0)', np.split(state, [1], axis=-1))
-        # angle, angular_velocity = torch.split(state, 1, dim=-1)
         angle, angular_velocity = np.split(state, [1], axis=-1)
-
-        # x_ddot = gravity / length * tf.sin(angle) + action / inertia
-        # x_ddot = gravity / length * torch.sin(angle) + action / inertia
         x_ddot = gravity / length * np.sin(angle) + action / inertia
 
         if friction > 0:
             x_ddot -= friction / inertia * angular_velocity
 
-        # state_derivative = tf.concat((angular_velocity, x_ddot), axis=1)
-        # state_derivative = torch.cat((angular_velocity, x_ddot), dim=-1)
         state_derivative = np.concatenate((angular_velocity, x_ddot), axis=-1)
 
         # Normalize
         return state_derivative
     
-    def _setup_symbolic(self, prior_prop={}, **kwargs):
-        """Setup the casadi symbolic dynamics."""
-        length = self.length
-        gravity = self.gravity
-        mass = self.mass
-        friction = self.friction
-        inertia = self.inertia # mass * length ** 2
-        dt = self.dt
-        # Input variables.
-        theta = cs.MX.sym('theta')
-        theta_dot = cs.MX.sym('theta_dot')
-        X = cs.vertcat(theta, theta_dot)
-        U = cs.MX.sym('u')
-        nx = 2
-        nu = 1
-        # Dynamics.
-        theta_ddot = gravity / length * cs.sin(theta) + U / inertia
-        if friction > 0:
-            theta_ddot -= friction / inertia * theta_dot
-        X_dot = cs.vertcat(theta_dot, theta_ddot)
-        # Observation.
-        Y = cs.vertcat(theta, theta_dot)
-        # Define cost (quandratic form).
-        Q = cs.MX.sym('Q', nx, nx)
-        R = cs.MX.sym('R', nu, nu)
-        Xr = cs.MX.sym('Xr', nx, 1)
-        Ur = cs.MX.sym('Ur', nu, 1)
-        cost_func = 0.5 * (X - Xr).T @ Q @ (X - Xr) + 0.5 * (U - Ur).T @ R @ (U - Ur)
-        # Define dynamics and cost dictionaries.
-        dynamics = {'dyn_eqn': X_dot, 'obs_eqn': Y, 'vars': {'X': X, 'U': U}}
-        cost = {'cost_func': cost_func, 'vars': {'X': X, 'U': U, 'Xr': Xr, 'Ur': Ur, 'Q': Q, 'R': R}}
-        params = {
-            # prior inertial properties
-            'pole_length': length,
-            'pole_mass': mass,
-            # equilibrium point for linearization
-            'X_EQ': np.zeros(self.nx),
-            'U_EQ': np.atleast_2d(Ur)[0, :],
-        }
-         # Setup symbolic model.
-        self.symbolic = SymbolicModel(dynamics=dynamics, cost=cost, dt=dt, params=params)
-
 def compute_roa_pendulum(grid, closed_loop_dynamics, horizon=100, tol=1e-3, equilibrium=None, no_traj=True):
     """Compute the largest ROA as a set of states in a discretization."""
     if isinstance(grid, np.ndarray):
@@ -706,8 +332,6 @@ def compute_roa_pendulum(grid, closed_loop_dynamics, horizon=100, tol=1e-3, equi
         trajectories = np.empty((nindex, ndim, horizon))
         trajectories[:, :, 0] = all_points
         for t in range(1, horizon):
-            # print('trajectories[:, :, t - 1]', trajectories[1, :, t - 1])
-            # print('trajectories[:, :, t - 1].shape', trajectories[1, :, t - 1].shape)
             # simulate all states in the grid
             trajectories[:, :, t] = closed_loop_dynamics(trajectories[:, :, t - 1])
                

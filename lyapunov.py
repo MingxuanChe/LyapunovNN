@@ -66,7 +66,7 @@ class GridWorld(object):
         num_points = np.broadcast_to(num_points, len(self.limits))
         self.num_points = num_points.astype(np.int16, copy=False)
         self.state_dim = len(self.limits)
-        # print('self.state_dim: ', self.state_dim)
+
 
         if np.any(self.num_points < 2):
             raise DimensionError('There must be at least 2 points in each '
@@ -313,10 +313,7 @@ class QuadraticFunction(object):
         super(QuadraticFunction, self).__init__()
 
         self.matrix = np.atleast_2d(matrix).astype(config.np_dtype)
-        # print('self.matrix\n',self.matrix)
         self.ndim = self.matrix.shape[0]
-        # with tf.variable_scope(self.scope_name):
-        #     self.matrix = tf.Variable(self.matrix)
 
     def __call__(self, *args, **kwargs):
         """Evaluate the function using the template to ensure variable sharing.
@@ -615,8 +612,6 @@ class Lyapunov(object):
         batch_size = config.gp_batch_size
         batch_generator = batchify((value_order, safe_set, refinement),
                                    batch_size)
-        # print('batch_generator\n', batch_generator.__dir__())
-        # exit()
         index_to_state = self.discretization.index_to_state
 
         #######################################################################
@@ -806,7 +801,6 @@ class GridWorld_pendulum(object):
         num_points = np.broadcast_to(num_points, len(self.limits))
         self.num_points = num_points.astype(np.int16, copy=False)
         self.state_dim = len(self.limits)
-        # print('self.state_dim: ', self.state_dim)
 
         if np.any(self.num_points < 2):
             raise DimensionError('There must be at least 2 points in each '

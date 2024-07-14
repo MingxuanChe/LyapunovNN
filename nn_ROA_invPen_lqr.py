@@ -203,7 +203,6 @@ print('')
 time.sleep(0.5)
 for _ in range(outer_iters):
     print('Iteration (k): {}'.format(len(c_max)))
-    # time.sleep(0.5)
 
     ## Identify the "gap" states, i.e., those between V(c_k) 
     ## and V(a * c_k) for a > 1
